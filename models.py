@@ -76,7 +76,7 @@ class GCN(torch.nn.Module):
     def __init__(self, args):
         super(GCN, self).__init__()
         self.num_features = args.num_features
-        self.nhid = args.nhid_gcn
+        self.nhid = args.nhid
         self.dropout_ratio = args.dropout_ratio
 
         # define the gcn layers. As stated in the paper,
@@ -87,9 +87,9 @@ class GCN(torch.nn.Module):
     def forward(self, x, edge_index, edge_weight):
         x = self.conv1(x, edge_index, edge_weight)
         x = x.relu()
-        x = F.dropout(x, p=self.dropout_ratio, training=self.training)
-        x = self.conv2(x, edge_index)
         # store the learned node embeddings
         features = x
+        x = F.dropout(x, p=self.dropout_ratio, training=self.training)
+        x = self.conv2(x, edge_index)
         x = torch.flatten(x)
         return x, features
