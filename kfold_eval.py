@@ -24,7 +24,7 @@ def kfold_mlp(data, args):
     :return: None. Best model for each fold is saved to args.check_dir/MLP/fold_%d
     """
     # locally set some parameters
-    args.times = 5  # repeat times of the second level 10-fold cross-validation
+    args.times = 3  # repeat times of the second level 10-fold cross-validation
     args.least = 50  # smallest number of training epochs; avoid under-fitting
     args.patience = 50  # patience for early stopping
     args.epochs = 1000  # maximum number of epochs
@@ -183,6 +183,8 @@ def kfold_gcn(edge_index, edge_attr, args):
     result_df.to_csv(os.path.join(result_path, 'GCN_pool_%.3f_seed_%d_.csv' % (args.pooling_ratio, args.seed)),
                      index=False, header=True)
 
+    print('Mean Accuracy: %f' % (sum(test_result_acc)/len(test_result_acc)))
+
 
 def logistic(args):
     kf = KFold(n_splits=10, random_state=args.seed, shuffle=True)
@@ -223,8 +225,8 @@ def logistic(args):
         test_acc = clf.score(testx, testy)
         acc_set.append(test_acc)
         result_df['fold_%d' % (i + 1)] = clf.predict_proba(x)[:, 1]
-
-        print('Test Accuracy: %f' % test_acc)
+        if args.verbose:
+            print('Test Accuracy: %f' % test_acc)
 
     print('\nAverage acc: %f' % (sum(acc_set)/len(acc_set)))
     print('Average Training Overhead (s): %f' % (sum(time_length)/len(time_length)))
@@ -234,3 +236,4 @@ def logistic(args):
         os.makedirs(result_path)
     result_df.to_csv(os.path.join(result_path, 'LR_pool_%.3f_seed_%d_.csv'%(args.pooling_ratio, args.seed)),
                      index=False, header=True)
+    print('Logistic Classification results saved to %s' % result_path)

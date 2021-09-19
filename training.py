@@ -204,10 +204,10 @@ def extract(data, args):
         print('extracting information with model {}'.format(fold_dir + '/' + best_model))
 
         checkpoint = torch.load(os.path.join(fold_dir, best_model))
-        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
+        model_args = checkpoint['args']
+        dataloader = DataLoader(dataset, batch_size=model_args.batch_size, shuffle=False)
 
-        args = checkpoint['args']
-        model = MultilayerPerceptron(args).to('cuda:0')
+        model = MultilayerPerceptron(model_args).to(model_args.device)
         # load model
         model.load_state_dict(checkpoint['net'])
 
@@ -229,6 +229,7 @@ def extract(data, args):
         # Just avoid that you have not use the stored models
         # This indicates the final performance on test set to some degree
         if args.verbose:
+            print(args.verbose)
             print('Overall accuracy: {:.6f} on fold {:d}'.format(sum(fold_acc), i + 1))
 
         features = pd.DataFrame(fold_feature_matrix)
