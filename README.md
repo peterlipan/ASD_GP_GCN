@@ -72,7 +72,7 @@ python visualize.py --roc --classifier=lr
 
 will plot the ROC curve and confusion matrix for the two classifiers respectively using the classification results saved to /results/
 
-![image-20210919164340004](C:\Users\Peter\AppData\Roaming\Typora\typora-user-images\image-20210919164340004.png)
+![image-roc](roc.png)
 
 ## Visualization
 
@@ -82,7 +82,7 @@ python visualize.py --embedding --group=gender
 
 will compare the 2D distribution difference between the features learned by MLP and the node embeddings later learned by GCN and renders the nodes according to different groups (gender, age, site).
 
-![image-20210919164459748](C:\Users\Peter\AppData\Roaming\Typora\typora-user-images\image-20210919164459748.png)
+![image-embedding](embedding.png)
 
 ## Citation
 
