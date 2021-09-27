@@ -85,10 +85,11 @@ will compare the 2D distribution difference between the features learned by MLP 
 ![image-embedding](embedding.png)
 
 ## Citation
-
+```
 @article{pan2021identifying,
   title={Identifying Autism Spectrum Disorder Based on Individual-Aware Down-Sampling and Multi-Modal Learning},
   author={Pan, Li and Liu, Jundong and Shi, Mingqin and Wong, Chi Wah and Chan, Kei Hang Katie},
   journal={arXiv preprint arXiv:2109.09129},
   year={2021}
 }
+```
