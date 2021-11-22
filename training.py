@@ -11,6 +11,7 @@ from torch_geometric.datasets import TUDataset
 from torch_geometric.data import DataLoader
 from models import GPModel, MultilayerPerceptron
 
+
 import torch.nn as nn
 
 
@@ -101,7 +102,6 @@ def train_mlp(model, train_loader, val_loader, optimizer, save_path, args):
     val_loss_values = []
     val_acc_values = []
     best_epoch = 0
-    epoch_num = 0
 
     t = time.time()
     model.train()
@@ -128,14 +128,12 @@ def train_mlp(model, train_loader, val_loader, optimizer, save_path, args):
 
         val_loss_values.append(loss_val)
         val_acc_values.append(acc_val)
-        epoch_num += 1
-        model_state = {'net': model.state_dict(), 'args': args}
-        torch.save(model_state, os.path.join(save_path, '{}.pth'.format(epoch)))
-
         # Skip logging the first args.least models
-        if epoch_num < args.least:
+        if epoch < args.least:
             continue
         if val_loss_values[-1] <= min_loss:
+            model_state = {'net': model.state_dict(), 'args': args}
+            torch.save(model_state, os.path.join(save_path, '{}.pth'.format(epoch)))
             min_loss = val_loss_values[-1]
             max_acc = val_acc_values[-1]
             best_epoch = epoch
@@ -160,10 +158,11 @@ def train_mlp(model, train_loader, val_loader, optimizer, save_path, args):
     return best_epoch, max_acc, min_loss
 
 
-def extract(data, args):
+def extract(data, args, least_epochs=100):
     """
     Herein, we use the best MLP model to extract further learned features from the pooling results
     This is the one that connects second part(MLP) and third part(GCN or LR) in our paper.
+    :param least_epochs: least number of training epochs. This is a rather important super parameter.
     :param data: Pooling results. shape: [number of subjects, dim of pooling features] = [871, 378]
     :param args: args from main.py
     :return: None. All the extracted further learned features are saved to /args.data/Further_Learned_Features/fold_%d
@@ -177,7 +176,6 @@ def extract(data, args):
     for i in range(10):
         fold_dir = os.path.join(args.check_dir, 'MLP', 'fold_%d' % (i + 1))
         files = os.listdir(fold_dir)
-        fold_acc = []
         max_acc = 0
         max_epoch = 0
         best_model = None
@@ -188,20 +186,17 @@ def extract(data, args):
                 epoch_num = int(f.split('_')[-2])
                 # further select more trained models
                 # avoid under-fitting
-                if epoch_num < 100:
-                    continue
-                if acc > max_acc:
+                if epoch_num > max_epoch:
                     max_epoch = epoch_num
-                    max_acc = acc
                     best_model = f
-                elif acc == max_acc:
-                    if epoch_num > max_epoch:
-                        max_epoch = epoch_num
-                        best_model = f
+
+        assert best_model is not None, \
+            'Cannot find the trained model. Maybe the least_epochs is too large.'
 
         # use the best MLP model to further extract features
         # from the downsampled brain imaging
-        print('extracting information with model {}'.format(fold_dir + '/' + best_model))
+        if args.verbose:
+            print('extracting information with model {}'.format(fold_dir + '/' + best_model))
 
         checkpoint = torch.load(os.path.join(fold_dir, best_model))
         model_args = checkpoint['args']
@@ -223,14 +218,12 @@ def extract(data, args):
             correct += pred.eq(data_y).sum().item()
             label += data_y.cpu().detach().numpy().tolist()
 
-        fold_acc.append(correct / 871)
         fold_feature_matrix = np.array(feature_matrix)
 
         # Just avoid that you have not use the stored models
         # This indicates the final performance on test set to some degree
         if args.verbose:
-            print(args.verbose)
-            print('Overall accuracy: {:.6f} on fold {:d}'.format(sum(fold_acc), i + 1))
+            print('Overall accuracy: {:.6f} on fold {:d}'.format(correct / len(label), i + 1))
 
         features = pd.DataFrame(fold_feature_matrix)
         features['label'] = label
@@ -249,7 +242,7 @@ def extract(data, args):
     print('Further Learned Features saved to features.txt')
 
 
-def test_gcn(loader, model, args):
+def test_gcn(loader, model, args, test=True):
     """
     Test the GCN performance on loader. We have not use validation set in GCN.
     So, this is used to print the performance on test set
@@ -262,14 +255,19 @@ def test_gcn(loader, model, args):
     correct = 0.0
     loss_test = 0.0
     output = []
+    criterion = nn.BCEWithLogitsLoss()
     for data in loader:
         data = data.to(args.device)
         out, _ = model(data.x, data.edge_index, data.edge_attr)
         output += out.cpu().detach().numpy().tolist()
-        pred = (out[data.test_mask] > 0).long()
-        correct += pred.eq(data.y[data.test_mask]).sum().item()
-        criterion = nn.BCEWithLogitsLoss()
-        loss_test += criterion(out[data.test_mask], data.y[data.test_mask].float()).item()
+        if test:
+            pred = (out[data.test_mask] > 0).long()
+            correct += pred.eq(data.y[data.test_mask]).sum().item()
+            loss_test += criterion(out[data.test_mask], data.y[data.test_mask].float()).item()
+        else:
+            pred = (out[data.val_mask] > 0).long()
+            correct += pred.eq(data.y[data.val_mask]).sum().item()
+            loss_test += criterion(out[data.val_mask], data.y[data.val_mask].float()).item()
     return correct / data.test_mask.sum().item(), loss_test, output
 
 
@@ -310,16 +308,19 @@ def train_gcn(dataloader, model, optimizer, save_path, args):
             correct += pred.eq(data.y[data.train_mask]).sum().item()
 
         acc_train = correct / data.train_mask.sum().item()
-
+        acc_val, loss_val, _ = test_gcn(dataloader, model, args, test=False)
         if args.verbose:
             print('\r', 'Epoch: {:06d}'.format(epoch + 1), 'loss_train: {:.6f}'.format(loss_train),
-                  'acc_train: {:.6f}'.format(acc_train), 'time: {:.6f}s'.format(time.time() - t), flush=True, end='')
+                  'acc_train: {:.6f}'.format(acc_train), 'loss_val: {:.6f}'.format(loss_val),
+                  'acc_val: {:.6f}'.format(acc_val), 'time: {:.6f}s'.format(time.time() - t), flush=True, end='')
 
-        loss_set.append(loss_train)
-        acc_set.append(acc_train)
-        model_state = {'net': model.state_dict(), 'args': args}
-        torch.save(model_state, os.path.join(save_path, '{}.pth'.format(epoch)))
+        loss_set.append(loss_val)
+        acc_set.append(acc_val)
+        if epoch < args.least:
+            continue
         if loss_set[-1] < min_loss:
+            model_state = {'net': model.state_dict(), 'args': args}
+            torch.save(model_state, os.path.join(save_path, '{}.pth'.format(epoch)))
             min_loss = loss_set[-1]
             best_epoch = epoch
             patience_cnt = 0

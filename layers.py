@@ -23,7 +23,7 @@ class TwoHopNeighborhood(object):
 
         edge_index = torch.cat([edge_index, index], dim=1)
         if edge_attr is None:
-            data.edge_index, _ = coalesce(edge_index, None, n, n)
+                data.edge_index, _ = coalesce(edge_index, None, n, n)
         else:
             value = value.view(-1, *[1 for _ in range(edge_attr.dim() - 1)])
             value = value.expand(-1, *list(edge_attr.size())[1:])
@@ -88,18 +88,16 @@ class NodeInformationScore(MessagePassing):
 
 
 class HGPSLPool(torch.nn.Module):
-    def __init__(self, in_channels, ratio=0.8, sample=False, sparse=False, sl=True, lamb=1.0, negative_slop=0.2):
+    def __init__(self, in_channels, ratio=0.8, sample=False, sparse=False, sl=True, lamb=1.0):
         super(HGPSLPool, self).__init__()
         self.in_channels = in_channels
         self.ratio = ratio
         self.sample = sample
         self.sparse = sparse
         self.sl = sl
-        self.negative_slop = negative_slop
         self.lamb = lamb
 
-        self.att = Parameter(torch.Tensor(1, self.in_channels * 2))
-        nn.init.xavier_uniform_(self.att.data)
+        self.sim = nn.CosineSimilarity(dim=1)
         self.sparse_attention = Sparsemax()
         self.neighbor_augment = TwoHopNeighborhood()
         self.calc_information_score = NodeInformationScore()
@@ -141,8 +139,8 @@ class HGPSLPool(torch.nn.Module):
 
             new_edge_index, new_edge_attr = add_remaining_self_loops(new_edge_index, new_edge_attr, 0, x.size(0))
             row, col = new_edge_index
-            weights = (torch.cat([x[row], x[col]], dim=1) * self.att).sum(dim=-1)
-            weights = F.leaky_relu(weights, self.negative_slop) + new_edge_attr * self.lamb
+            weights = torch.abs(self.sim(x[row], x[col]))
+            weights = weights + self.lamb * new_edge_attr
             adj = torch.zeros((x.size(0), x.size(0)), dtype=torch.float, device=x.device)
             adj[row, col] = weights
             new_edge_index, weights = dense_to_sparse(adj)
@@ -172,8 +170,8 @@ class HGPSLPool(torch.nn.Module):
             new_edge_index, _ = dense_to_sparse(adj)
             row, col = new_edge_index
 
-            weights = (torch.cat([x[row], x[col]], dim=1) * self.att).sum(dim=-1)
-            weights = F.leaky_relu(weights, self.negative_slop)
+            weights = torch.abs(self.sim(x[row], x[col]))
+            weights = weights + self.lamb
             adj[row, col] = weights
             induced_row, induced_col = induced_edge_index
 

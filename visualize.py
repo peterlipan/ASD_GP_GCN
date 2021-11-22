@@ -22,7 +22,7 @@ parser.add_argument('--result_root', type=str, default='./results', help='Root f
 parser.add_argument('--model_root', type=str, default='./checkpoints', help='Root for the stored models')
 parser.add_argument('--data_root', type=str, default='./data', help='Root for the data')
 parser.add_argument('--seed', type=int, default=13, help='Random seed. To specify the test set for evaluation')
-parser.add_argument('--pooling_ratio', type=int, default=0.005, help='pooling ratio.')
+parser.add_argument('--pooling_ratio', type=int, default=0.01, help='pooling ratio.')
 parser.add_argument('--classifier', type=str, default='lr', help='Name of the classifier, gcn or lr')
 parser.add_argument('--group', type=str, default='gender', help='Phenotypic attribute to group subjects on')
 
@@ -210,7 +210,7 @@ if __name__ == '__main__':
         elif args.group == 'age':
             # hard coding...
             sample_ages = []
-            for i in range(871):
+            for i in range(logs.shape[0]):
                 if logs['AGE_AT_SCAN'].values[i] <= 12:
                     sample_ages.append('0 <= age <= 12')
                 elif logs['AGE_AT_SCAN'].values[i] <= 17:

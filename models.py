@@ -15,7 +15,7 @@ class GPModel(torch.nn.Module):
         self.pooling_ratio = args.pooling_ratio
         self.sample = True
         self.sparse = True
-        self.sl = True
+        self.sl = False
         self.lamb = 1.0
 
         # define the pooling layers
