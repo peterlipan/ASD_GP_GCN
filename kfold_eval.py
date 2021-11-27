@@ -24,7 +24,7 @@ def kfold_mlp(data, args):
     :return: None. Best model for each fold is saved to args.check_dir/MLP/fold_%d
     """
     # locally set some parameters
-    args.times = 5  # repeat times of the second level 10-fold cross-validation
+    args.times = 1  # repeat times of the second level 10-fold cross-validation
     args.least = 50  # smallest number of training epochs; avoid under-fitting
     args.patience = 50  # patience for early stopping
     args.epochs = 1000  # maximum number of epochs
@@ -96,10 +96,11 @@ def kfold_mlp(data, args):
                                                .format(count + 1, best_val_acc, args.pooling_ratio, best_model)))
 
 
-def kfold_gcn(edge_index, edge_attr, num_samples, times, args):
+def kfold_gcn(edge_index, edge_attr, num_samples, args):
     """
     Training phase of GCN. Some parameters of args are locally set here.
     No validation is implemented in this section.
+    :param num_samples: number of samples
     :param edge_index: adjacency matrix of population graph.
     :param edge_attr: edge weights, say cosine similarity values
     :param args: args from main.py
@@ -111,8 +112,7 @@ def kfold_gcn(edge_index, edge_attr, num_samples, times, args):
     args.epochs = 100000  # maximum number of training epochs
     args.patience = 30000  # patience for early stop regarding the performance on train set
     args.weight_decay = 0.001
-    args.least = 50000
-    args.batch_size = 900
+    args.least = 50000  # least number of training epochs
 
     # load population graph
     edge_index = torch.tensor(edge_index, dtype=torch.long)
@@ -175,7 +175,7 @@ def kfold_gcn(edge_index, edge_attr, num_samples, times, args):
         checkpoint = torch.load(os.path.join(work_path, '{}.pth'.format(best_model)))
         model.load_state_dict(checkpoint['net'])
         test_acc, test_loss, test_out = test_gcn(loader, model, args)
-        result_df['fold_%d_time_%d_' % (i + 1, times+1)] = test_out
+        result_df['fold_%d_' % (i + 1)] = test_out
         test_result_acc.append(test_acc)
         test_result_loss.append(test_loss)
         print('GCN {:0>2d} fold test set results, loss = {:.6f}, accuracy = {:.6f}'.format(i + 1, test_loss, test_acc))
@@ -196,7 +196,7 @@ def kfold_gcn(edge_index, edge_attr, num_samples, times, args):
     print('Mean Accuracy: %f' % (sum(test_result_acc)/len(test_result_acc)))
 
 
-def logistic(num_samples, args, times):
+def logistic(num_samples, args):
     kf = KFold(n_splits=10, random_state=args.seed, shuffle=True)
     indices = np.arange(num_samples)
     checkpoint_dir = os.path.join(args.data_dir, 'Further_Learned_Features')
@@ -235,7 +235,7 @@ def logistic(num_samples, args, times):
         training_iters.append(clf.n_iter_)
         test_acc = clf.score(testx, testy)
         acc_set.append(test_acc)
-        result_df['fold_%d_time_%d_' % (i + 1, times+1)] = clf.predict_proba(x)[:, 1]
+        result_df['fold_%d_' % (i + 1)] = clf.predict_proba(x)[:, 1]
         if args.verbose:
             print('Test Accuracy: %f' % test_acc)
 
@@ -247,6 +247,6 @@ def logistic(num_samples, args, times):
     if not os.path.exists(result_path):
         os.makedirs(result_path)
     result_df.to_csv(os.path.join(result_path,
-                                  'LR_pool_%.3f_seed_%d_time_%d_.csv'%(args.pooling_ratio, args.seed, times+1)),
+                                  'LR_pool_%.3f_seed_%d_.csv'%(args.pooling_ratio, args.seed)),
                      index=False, header=True)
     print('Logistic Classification results saved to %s' % result_path)

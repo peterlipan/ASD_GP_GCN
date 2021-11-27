@@ -19,7 +19,7 @@ parser.add_argument('--device', type=str, default='cuda:0', help='specify cuda d
 parser.add_argument('--check_dir', type=str, default='./checkpoints', help='root of saved models')
 parser.add_argument('--result_dir', type=str, default='./results', help='root of classification results')
 parser.add_argument('--gcn', action='store_true', default=False, help='Use GCN as the classifier')
-parser.add_argument('--logistic', action='store_true', default=False, help='Use LR as the classifier')
+parser.add_argument('--logistic', action='store_true', default=True, help='Use LR as the classifier')
 parser.add_argument('--verbose', type=bool, default=True, help='print training details')
 
 args = parser.parse_args()
@@ -36,7 +36,8 @@ if __name__ == '__main__':
 
     # load sparse brain networking
     downsample = pd.read_csv(downsample_file, header=None, sep='\t').values
-    # kfold_mlp(downsample, args)
+    # Train MLP in the inner loop of nested cv
+    kfold_mlp(downsample, args)
 
     # use the best MLP model to extract further learned features
     # from pooling results
@@ -44,7 +45,7 @@ if __name__ == '__main__':
 
     # run Logistic Regression as the classifier
     if args.logistic:
-        logistic(downsample.shape[0], args, 4)
+        logistic(downsample.shape[0], args)
 
     # run Graph Convolutional Networks as the classifier
     if args.gcn:
