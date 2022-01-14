@@ -39,38 +39,26 @@ This script will automatically download ABIDE I dataset preprocessed by CPAC and
 
 ## Run the diagnosis framework
 
-Try the framework with Logistic Regression as the classifier:
+Run the framework:
 
 ```
-python main.py --logistic
-```
-
-Or the GCN:
-
-```
-python main.py --gcn
+python main.py
 ```
 
 main.py includes:
 
-1. The unsupervised graph pooling. The results will by default be saved to /data/ABIDE_downsample/ with respect to different pooling ratios.
-2. Training phase of the MLP under 10-fold cross-validation
+1. The unsupervised graph pooling. The results will by default be saved to /data/ABIDE_downsample/.
+2. Training phase of the MLP under nested 10-fold cross-validation
 3. Use the best model from the trained MLP to extract the further learned features from pooling results under the same cross-validation of 2.
 4. train/test classifiers under the same cross-validation of 2.
 
 ## Evaluation
 
 ```
-python visualize.py --roc --classifier=gcn
+python visualize.py --roc
 ```
 
-or 
-
-```
-python visualize.py --roc --classifier=lr
-```
-
-will plot the ROC curve and confusion matrix for the two classifiers respectively using the classification results saved to /results/
+will plot the ROC curve and confusion matrix for the framework using the classification results saved to /results/
 
 ![image-roc](roc.png)
 
@@ -80,7 +68,7 @@ will plot the ROC curve and confusion matrix for the two classifiers respectivel
 python visualize.py --embedding --group=gender
 ```
 
-will compare the 2D distribution difference between the features learned by MLP and the node embeddings later learned by GCN and renders the nodes according to different groups (gender, age, site).
+will compare the 2D distribution difference between the features learned by MLP and the node embeddings later learned by GCN and renders the nodes according to different groups (gender, age, site). The parameter --group could be 'gender', 'site', or 'age'.
 
 ![image-embedding](embedding.png)
 
