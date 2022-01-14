@@ -38,6 +38,7 @@ def brain_graph(logs, atlas, path, data_folder):
     not_left = [i for i in range(111) if atlas['label'][i] != 0]
     not_gb = [i for i in range(111) if atlas['label'][i] != -1]
 
+    # Build the bipartite brain graph
     for idx in range(111):
         if atlas['label'][idx] == 0:
             adj[idx, not_left] = 1
@@ -118,7 +119,7 @@ def brain_graph(logs, atlas, path, data_folder):
 def population_graph(args):
     """
     Build the population graph. The nodes are connected if their cosine similarity is above 0.5
-    in terms of phenotypic information: gender, site, age.
+    in terms of xhenotypic information: gender, site, age.
     :param args: args from main.py
     :return: adj, att: adjacency matrix and edge weights
     """
@@ -136,18 +137,16 @@ def population_graph(args):
     # Normalization
     ages = (ages - min(ages)) / (max(ages) - min(ages))
 
-    cluster_features = np.c_[text_feature, ages]
+    cluster_features = text_feature
 
     adj = []
     att = []
     sim_matrix = cosine_similarity(cluster_features)
     for i in range(871):
         for j in range(871):
-            if i != j:
-                # threshold of similarity = 0.5
-                if sim_matrix[i, j] > 0.5 and i > j:
-                    adj.append([i, j])
-                    att.append(sim_matrix[i, j])
+            if sim_matrix[i, j] > 0.5 and i > j:
+                adj.append([i, j])
+                att.append(sim_matrix[i, j])
 
     adj = np.array(adj).T
     att = np.array([att]).T

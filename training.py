@@ -123,8 +123,7 @@ def train_mlp(model, train_loader, val_loader, optimizer, save_path, args):
         acc_val, loss_val = test_mlp(model, val_loader, args)
         if args.verbose:
             print('\r', 'Epoch: {:04d}'.format(epoch + 1), 'loss_train: {:.6f}'.format(loss_train),
-                  'acc_train: {:.6f}'.format(acc_train), 'loss_val: {:.6f}'.format(loss_val),
-                  'acc_val: {:.6f}'.format(acc_val), 'time: {:.6f}s'.format(time.time() - t), end='', flush=True)
+                  'acc_train: {:.6f}'.format(acc_train), 'time: {:.6f}s'.format(time.time() - t), end='', flush=True)
 
         val_loss_values.append(loss_val)
         val_acc_values.append(acc_val)
@@ -176,7 +175,6 @@ def extract(data, args, least_epochs=100):
     for i in range(10):
         fold_dir = os.path.join(args.check_dir, 'MLP', 'fold_%d' % (i + 1))
         files = os.listdir(fold_dir)
-        max_acc = 0
         max_epoch = 0
         best_model = None
 
@@ -184,8 +182,6 @@ def extract(data, args, least_epochs=100):
             if f.endswith('.pth') and f.startswith('num_'):
                 acc = float(f.split('_')[3])
                 epoch_num = int(f.split('_')[-2])
-                # further select more trained models
-                # avoid under-fitting
                 if epoch_num > max_epoch:
                     max_epoch = epoch_num
                     best_model = f
@@ -219,11 +215,6 @@ def extract(data, args, least_epochs=100):
             label += data_y.cpu().detach().numpy().tolist()
 
         fold_feature_matrix = np.array(feature_matrix)
-
-        # Just avoid that you have not use the stored models
-        # This indicates the final performance on test set to some degree
-        if args.verbose:
-            print('Overall accuracy: {:.6f} on fold {:d}'.format(correct / len(label), i + 1))
 
         features = pd.DataFrame(fold_feature_matrix)
         features['label'] = label
@@ -262,13 +253,15 @@ def test_gcn(loader, model, args, test=True):
         output += out.cpu().detach().numpy().tolist()
         if test:
             pred = (out[data.test_mask] > 0).long()
+            length = data.test_mask.sum().item()
             correct += pred.eq(data.y[data.test_mask]).sum().item()
             loss_test += criterion(out[data.test_mask], data.y[data.test_mask].float()).item()
         else:
             pred = (out[data.val_mask] > 0).long()
+            length = data.val_mask.sum().item()
             correct += pred.eq(data.y[data.val_mask]).sum().item()
             loss_test += criterion(out[data.val_mask], data.y[data.val_mask].float()).item()
-    return correct / data.test_mask.sum().item(), loss_test, output
+    return correct / length, loss_test, output
 
 
 def train_gcn(dataloader, model, optimizer, save_path, args):

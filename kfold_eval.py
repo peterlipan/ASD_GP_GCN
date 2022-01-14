@@ -11,7 +11,6 @@ from models import GPModel, MultilayerPerceptron, GCN
 from sklearn.model_selection import KFold
 from torch.utils.data import Subset
 from torch_geometric.data import DataLoader, Data
-from sklearn.linear_model import LogisticRegression
 
 
 def kfold_mlp(data, args):
@@ -24,11 +23,12 @@ def kfold_mlp(data, args):
     :return: None. Best model for each fold is saved to args.check_dir/MLP/fold_%d
     """
     # locally set some parameters
-    args.times = 1  # repeat times of the second level 10-fold cross-validation
-    args.least = 50  # smallest number of training epochs; avoid under-fitting
+    args.times = 3  # repeat times of the second level 10-fold cross-validation
+    args.least = 60  # smallest number of training epochs; avoid under-fitting
     args.patience = 50  # patience for early stopping
-    args.epochs = 1000  # maximum number of epochs
+    args.epochs = 200  # maximum number of epochs
     args.weight_decay = 0.1
+    args.nhid = 256
 
     indices = np.arange(data.shape[0])
     kf = KFold(n_splits=10, random_state=args.seed, shuffle=True)
@@ -52,6 +52,9 @@ def kfold_mlp(data, args):
                 if args.verbose:
                     print('%d val set out of 10' % (count + 1))
 
+                val_idx = train_idx[val_id]
+                train_idx1 = train_idx[train_id]
+
                 # create fold dir
                 fold_dir = os.path.join(args.check_dir, 'MLP', 'fold_%d' % (i + 1))
                 if not os.path.exists(fold_dir):
@@ -74,12 +77,18 @@ def kfold_mlp(data, args):
 
                 # Set training and validation set
                 # Do not use the test set
-                train_set = Subset(dataset, train_id)
-                val_set = Subset(dataset, val_id)
+                train_set = Subset(dataset, train_idx1)
+                val_set = Subset(dataset, val_idx)
+                test_set = Subset(dataset, test_idx)
+
+                # Make sure the three datasets are independent
+                assert len(set(list(train_idx1) + list(test_idx) + list(val_idx))) == x.shape[0], \
+                    'Something goes wrong with 10-fold cross-validation'
 
                 # Build the data loader
                 training_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
                 validation_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
+                test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
 
                 # Model training
                 best_model, best_val_acc, best_val_loss = train_mlp(model=model, train_loader=training_loader,
@@ -92,15 +101,14 @@ def kfold_mlp(data, args):
 
                 # Save the best model
                 state = {'net': model.state_dict(), 'args': args}
-                torch.save(state, os.path.join(fold_dir, 'num_{:d}_valacc_{:.6f}_pool_{:.3f}_epoch_{:d}_.pth'
-                                               .format(count + 1, best_val_acc, args.pooling_ratio, best_model)))
+                torch.save(state, os.path.join(fold_dir, 'num_{:d}_valloss_{:.6f}_pool_{:.3f}_epoch_{:d}_.pth'
+                                               .format(count + 1, best_val_loss, args.pooling_ratio, best_model)))
 
 
 def kfold_gcn(edge_index, edge_attr, num_samples, args):
     """
     Training phase of GCN. Some parameters of args are locally set here.
     No validation is implemented in this section.
-    :param num_samples: number of samples
     :param edge_index: adjacency matrix of population graph.
     :param edge_attr: edge weights, say cosine similarity values
     :param args: args from main.py
@@ -110,9 +118,9 @@ def kfold_gcn(edge_index, edge_attr, num_samples, args):
     args.num_features = args.nhid // 2  # output feature size of MLP
     args.nhid = args.num_features // 2
     args.epochs = 100000  # maximum number of training epochs
-    args.patience = 30000  # patience for early stop regarding the performance on train set
+    args.patience = 20000  # patience for early stop regarding the performance on val set
     args.weight_decay = 0.001
-    args.least = 50000  # least number of training epochs
+    args.least = 0  # least number of training epochs
 
     # load population graph
     edge_index = torch.tensor(edge_index, dtype=torch.long)
@@ -133,8 +141,13 @@ def kfold_gcn(edge_index, edge_attr, num_samples, args):
         work_path = os.path.join(args.check_dir, 'GCN')
 
         np.random.shuffle(train_idx)
+        # random assign val and test sets. No nested search.
         val_idx = train_idx[:len(train_idx)//10]
         train_idx = train_idx[len(train_idx)//10:]
+
+        # Make sure the three datasets are independent
+        assert len(set(list(train_idx) + list(test_idx) + list(val_idx))) == num_samples, \
+            'Something wrong in the CV'
 
         if not os.path.exists(work_path):
             os.makedirs(work_path)
@@ -143,10 +156,12 @@ def kfold_gcn(edge_index, edge_attr, num_samples, args):
         model = GCN(args).to(args.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
+        # Load 'further learned features'
         feature_path = os.path.join(fold_path, 'features.txt')
         assert os.path.exists(feature_path), \
             'No further learned features found!'
         content = pd.read_csv(feature_path, header=None, sep='\t')
+
         x = content.iloc[:, :-1].values
         y = content.iloc[:, -1].values
 
@@ -165,9 +180,15 @@ def kfold_gcn(edge_index, edge_attr, num_samples, args):
         # set the mask for dataset
         data.train_mask = torch.tensor(train_mask, dtype=torch.bool)
         data.test_mask = torch.tensor(test_mask, dtype=torch.bool)
-        data.val_mask = torch.tensor(val_mask, dtype=bool)
+        data.val_mask = torch.tensor(val_mask, dtype=torch.bool)
 
-        loader = DataLoader([data], batch_size=args.batch_size)
+        # assure the masks has no overlaps!
+        # Necessary in experiments
+        assert sum(data.train_mask + data.test_mask + data.val_mask) == num_samples, \
+            'Something wrong with the cross-validation. Check the training set!'
+
+        # Batch-size is meaningless
+        loader = DataLoader([data], batch_size=1)
 
         # Model training
         best_model = train_gcn(loader, model, optimizer, work_path, args)
@@ -175,78 +196,27 @@ def kfold_gcn(edge_index, edge_attr, num_samples, args):
         checkpoint = torch.load(os.path.join(work_path, '{}.pth'.format(best_model)))
         model.load_state_dict(checkpoint['net'])
         test_acc, test_loss, test_out = test_gcn(loader, model, args)
+
+        # Store the resluts
         result_df['fold_%d_' % (i + 1)] = test_out
         test_result_acc.append(test_acc)
         test_result_loss.append(test_loss)
+        acc_val, loss_val, _ = test_gcn(loader, model, args, test=False)
         print('GCN {:0>2d} fold test set results, loss = {:.6f}, accuracy = {:.6f}'.format(i + 1, test_loss, test_acc))
+        print('GCN {:0>2d} fold val set results, loss = {:.6f}, accuracy = {:.6f}'.format(i + 1, loss_val, acc_val))
 
         state = {'net': model.state_dict(), 'args': args}
         torch.save(state, os.path.join(work_path, 'fold_{:d}_test_{:.6f}_drop_{:.3f}_epoch_{:d}_.pth'
                                        .format(i + 1, test_acc, args.dropout_ratio, best_model)))
 
     # save the predictions to args.result_dir/Graph Convolutional Networks/GCN_pool_%.3f_seed_%d_.csv
-    result_path = os.path.join(args.result_dir, 'Graph Convolutional Networks')
+    result_path = args.result_dir
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
     result_df.to_csv(os.path.join(result_path,
-                                  'GCN_pool_%.3f_seed_%d_time_%d_.csv' % (args.pooling_ratio, args.seed, times+1)),
+                                  'GCN_pool_%.3f_seed_%d_.csv' % (args.pooling_ratio, args.seed)),
                      index=False, header=True)
 
     print('Mean Accuracy: %f' % (sum(test_result_acc)/len(test_result_acc)))
 
-
-def logistic(num_samples, args):
-    kf = KFold(n_splits=10, random_state=args.seed, shuffle=True)
-    indices = np.arange(num_samples)
-    checkpoint_dir = os.path.join(args.data_dir, 'Further_Learned_Features')
-    acc_set = []
-
-    # store the output of logistic regression
-    result_df = pd.DataFrame([])
-
-    time_length = []
-    training_iters = []
-    for i, (train_idx, test_idx) in enumerate(kf.split(indices)):
-        fold_path = os.path.join(checkpoint_dir, 'fold_%d' % (i+1))
-        feature_file = os.path.join(fold_path, 'features.txt')
-        indices_file = os.path.join(fold_path, 'test_indices.txt')
-        saved_indices = np.loadtxt(indices_file, dtype=int)
-
-        # Again, make sure you are using the same test set
-        assert np.array_equal(test_idx, saved_indices), \
-            'Something wrong with the 10-fold Cross Validation'
-
-        if args.verbose:
-            print('Evaluate on the %d fold' % (i+1))
-        features = pd.read_csv(feature_file, sep='\t', header=None)
-        x = features.iloc[:, :-1].values
-        y = features.iloc[:, -1].values
-        trainx = x[train_idx]
-        trainy = y[train_idx]
-        testx = x[test_idx]
-        testy = y[test_idx]
-
-        start = time.time()
-        clf = LogisticRegression(max_iter=10000)
-        clf.fit(trainx, trainy)
-        end = time.time()
-        time_length.append(end-start)
-        training_iters.append(clf.n_iter_)
-        test_acc = clf.score(testx, testy)
-        acc_set.append(test_acc)
-        result_df['fold_%d_' % (i + 1)] = clf.predict_proba(x)[:, 1]
-        if args.verbose:
-            print('Test Accuracy: %f' % test_acc)
-
-    print('\nAverage acc: %f' % (sum(acc_set)/len(acc_set)))
-    if args.verbose:
-        print('Average Training Overhead (s): %f' % (sum(time_length)/len(time_length)))
-        print('Average Training Iterations: %d' % (sum(training_iters)/len(training_iters)))
-    result_path = os.path.join(args.result_dir, 'Logistic Regression')
-    if not os.path.exists(result_path):
-        os.makedirs(result_path)
-    result_df.to_csv(os.path.join(result_path,
-                                  'LR_pool_%.3f_seed_%d_.csv'%(args.pooling_ratio, args.seed)),
-                     index=False, header=True)
-    print('Logistic Classification results saved to %s' % result_path)

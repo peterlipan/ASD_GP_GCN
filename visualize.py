@@ -22,8 +22,7 @@ parser.add_argument('--result_root', type=str, default='./results', help='Root f
 parser.add_argument('--model_root', type=str, default='./checkpoints', help='Root for the stored models')
 parser.add_argument('--data_root', type=str, default='./data', help='Root for the data')
 parser.add_argument('--seed', type=int, default=13, help='Random seed. To specify the test set for evaluation')
-parser.add_argument('--pooling_ratio', type=int, default=0.01, help='pooling ratio.')
-parser.add_argument('--classifier', type=str, default='lr', help='Name of the classifier, gcn or lr')
+parser.add_argument('--pooling_ratio', type=float, default=0.05, help='pooling ratio')
 parser.add_argument('--group', type=str, default='gender', help='Phenotypic attribute to group subjects on')
 
 args = parser.parse_args()
@@ -163,12 +162,8 @@ def feature2embedding(model, feature, edge_index, edge_attr, args):
 if __name__ == '__main__':
     # plot roc curve and mean confusion matrix
     if args.roc:
-        classifier = {'lr': 'Logistic Regression',
-                      'gcn': 'Graph Convolutional Networks'}
-        # The threshold for two classifiers are different
-        # because we have used BCELossWithDigits in GCN
-        thresholds = {'lr': 0.5, 'gcn': 0}
-        result_path = os.path.join(args.result_root, classifier[args.classifier])
+        threshold = 0
+        result_path = args.result_root
         assert os.path.exists(result_path), \
             'No classification result found'
         file_name = [f for f in os.listdir(result_path)
@@ -185,9 +180,9 @@ if __name__ == '__main__':
         # load ground truth
         labels = pd.read_csv(os.path.join(args.data_root, 'phenotypic', 'log.csv'))['label']
         # plot
-        draw_cv_roc_curve(kf, pred, labels, thre=thresholds[args.classifier],
-                          title='{:s}, pooling ratio = {:.3f}, random seed = {:d}'.
-                          format(classifier[args.classifier], args.pooling_ratio, args.seed))
+        draw_cv_roc_curve(kf, pred, labels, thre=threshold,
+                          title='pooling ratio = {:.3f}, random seed = {:d}'.
+                          format(args.pooling_ratio, args.seed))
 
     # visualize node embeddings
     if args.embedding:
