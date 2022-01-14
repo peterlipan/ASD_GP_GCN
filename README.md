@@ -35,7 +35,7 @@ pip install torch-geometric
 python download_ABIDE.py
 ```
 
-This script will automatically download ABIDE I dataset preprocessed by CPAC and construct the graph representation of the brain imaging.
+This script will automatically download ABIDE I dataset preprocessed by CPAC and construct the graph representation of the brain imaging. After downloading, the raw data (i.e. fMRI) will be deleted. The graph representation of brain will be saved at './data/ABIDE/'.
 
 ## Run the diagnosis framework
 
