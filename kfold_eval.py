@@ -184,8 +184,8 @@ def kfold_gcn(edge_index, edge_attr, num_samples, args):
 
         # assure the masks has no overlaps!
         # Necessary in experiments
-        assert sum(data.train_mask + data.test_mask + data.val_mask) == num_samples, \
-            'Something wrong with the cross-validation. Check the training set!'
+        assert np.array_equal(train_mask + val_mask + test_mask, np.ones_like(train_mask)), \
+            'Something wrong with the cross-validation!'
 
         # Batch-size is meaningless
         loader = DataLoader([data], batch_size=1)
