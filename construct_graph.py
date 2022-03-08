@@ -137,7 +137,7 @@ def population_graph(args):
     # Normalization
     ages = (ages - min(ages)) / (max(ages) - min(ages))
 
-    cluster_features = text_feature
+    cluster_features = np.c_[text_feature, ages]
 
     adj = []
     att = []
